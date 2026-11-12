@@ -811,61 +811,93 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
     flex: 1 1 auto; min-height: 0;
     padding: 6px; gap: 6px; overflow: hidden;
   }
-  .stage-panel { flex: 0 0 auto; gap: 5px; min-height: 0; }
-  .stage-frame { flex: 0 0 auto; height: 32dvh; min-height: 180px; max-height: 34dvh; }
-  .transport { padding: 5px 8px; gap: 6px; }
-  .transport-play { width: 32px; height: 32px; }
-  .timecode-label { font-size: 10px; min-width: 78px; padding: 3px 5px; border-radius: 7px; }
+  /* ══ 3-ZONE CAPCUT MOBILE GRID (strict, no overflow, no overlap) ══ */
+  .studio {
+    display: grid;
+    grid-template-rows: minmax(0, 40dvh) minmax(0, 1fr);
+    flex: 1 1 auto; min-height: 0;
+    padding: 0; gap: 0; overflow: hidden;
+  }
+  .stage-panel {
+    grid-row: 1; display: flex; flex-direction: column;
+    gap: 0; min-height: 0; border-bottom: 1px solid var(--border);
+  }
+  .stage-frame {
+    flex: 1 1 auto; min-height: 0; height: auto; max-height: 40dvh;
+    border-radius: 0; border: 0;
+  }
+  .transport {
+    flex: 0 0 auto; height: 52px; padding: 6px 10px; gap: 10px;
+    border-top: 1px solid var(--border); background: #0f0f0f;
+  }
+  .transport-play { width: 44px; height: 44px; flex: 0 0 auto; }
+  .timecode-label { font-size: 10.5px; min-width: 84px; padding: 5px 6px; }
   .seek-bar { min-width: 0; }
 
-  /* Tool panel = CapCut slide-up sheet (same DOM, same ids) */
+  /* Middle tool panel — strict bounded height, scrolls inside */
   .tool-panel {
-    order: 2; flex: 1 1 auto; min-height: 0;
-    overflow-y: auto; padding-right: 0; max-height: none;
-    scrollbar-width: none;
+    grid-row: 2; flex: 0 0 auto; display: flex; flex-direction: column;
+    min-height: 0; overflow-y: auto; padding: 6px 8px; gap: 6px;
+    scrollbar-width: none; background: #0d0d0d;
   }
-  .card { padding: 10px 11px; flex: 0 0 auto; }
+  .card { flex: 0 0 auto; padding: 8px 9px; }
+  .card-head { gap: 6px; }
   .card-head h2 { font-size: 10px; }
-  .step-badge { width: 16px; height: 16px; font-size: 9px; }
-  .hint { font-size: 9.5px; }
+  .step-badge { width: 16px; height: 16px; font-size: 8.5px; }
+  .hint, .meta-line { font-size: 9px; }
 
-  /* Timeline: compact but fully touch-friendly */
-  .timeline-bar { flex: 0 0 132px; }
-  .timeline-toolbar { height: 36px; padding: 0 6px; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+  /* Bottom timeline — pinned, fixed height so tracks never collapse or bunch */
+  .timeline-bar { flex: 0 0 148px; min-height: 128px; }
+  .timeline-toolbar {
+    height: 46px; padding: 0 6px; gap: 6px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto; scrollbar-width: none;
+  }
   .toolbar-label { display: none; }
-  .tool-btn { height: 28px; min-width: 30px; padding: 0 6px; }
-  .tool-btn svg { width: 15px; height: 15px; }
+  .toolbar-spacer { display: none; }
+  .tool-btn {
+    height: 44px; min-width: 44px; padding: 0 10px; gap: 5px;
+    font-size: 9px; border-radius: 8px;
+  }
+  .tool-btn svg { width: 17px; height: 17px; }
   .tool-btn span { font-size: 8.5px; }
-  .timeline-body { min-height: 0; }
-  .track-gutter { flex: 0 0 40px; }
-  .lane-label { font-size: 9px; padding: 0 4px 0 6px; gap: 3px; }
+  .lanes-wrap { flex: 1 1 auto; min-height: 0; }
+  .track-gutter { flex: 0 0 44px; }
+  .lane-label { font-size: 10px; padding: 0 4px; gap: 3px; }
   .lane-label span { display: none; }
-  .clip-block { min-width: 64px; padding: 2px 6px; }
-  .clip-name { font-size: 7.5px; max-width: 96px; }
-  .clip-index { font-size: 6.5px; }
-  .clip-dur { font-size: 6.5px; }
-  .lane-chip { font-size: 8px; }
-  .timeline-empty { font-size: 9px; white-space: normal; text-align: center; }
+  .lane-label svg { width: 14px; height: 14px; }
+  .clip-block { padding: 2px 4px 2px 2px; }
+  .clip-name { font-size: 7px; max-width: 72px; }
+  .clip-index, .clip-dur { font-size: 6.5px; }
+  .lane-chip { font-size: 8px; max-width: 160px; }
+  .timeline-empty { font-size: 9px; white-space: normal; text-align: center; padding: 4px 8px; }
   .timeline-foot { display: none; }
+  .track-lane { min-height: 0; }
+  .clip-handle {
+    width: 32px; height: 54px; font-size: 17px;
+    background: rgba(0,0,0,.85); border-width: 2px;
+  }
 
-  /* Bottom fixed CapCut Mobile dock */
+  /* Bottom fixed CapCut Mobile dock — Zone 3 anchor, ≥44px per-button touch targets */
   .mobile-dock {
     display: flex; flex: 0 0 auto;
-    background: #141414;
+    height: 64px;
+    background: #0a0a0a;
     border-top: 1px solid var(--border-2);
-    padding: 4px 4px calc(5px + env(safe-area-inset-bottom));
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
     gap: 2px;
     overflow-x: auto; scrollbar-width: none;
     position: relative; z-index: 40;
+    box-shadow: 0 -4px 16px rgba(0,0,0,.5);
   }
   .mobile-dock::-webkit-scrollbar { display: none; }
   .dock-btn {
-    flex: 1 0 auto; min-width: 54px; height: 54px;
+    flex: 1 0 auto; min-width: 60px; height: 52px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 2px; background: transparent; border: 1px solid transparent; border-radius: 12px;
+    gap: 1px; background: transparent; border: 1px solid transparent; border-radius: 12px;
     color: var(--text-dim); transition: all .15s ease;
   }
-  .dock-btn span { font-size: 7px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+  .dock-btn span { font-size: 8px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
   .dock-btn:hover, .dock-btn:focus-visible, .dock-btn:active {
     color: var(--accent); background: var(--panel-3);
     border-color: rgba(62,166,255,.4); box-shadow: 0 0 12px rgba(62,166,255,.15);
