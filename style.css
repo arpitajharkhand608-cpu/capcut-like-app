@@ -880,14 +880,33 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
 }
 .clip-block.just-split { animation: clipPop .45s cubic-bezier(.2,1.4,.3,1); }
 
-/* Touch-friendly trim handles visual hint on clip blocks */
-.clip-block::before, .clip-block::after {
-  content: ""; position: absolute; top: 0; bottom: 0; width: 5px;
-  background: transparent; border-radius: 4px;
+/* Touch trim handles on clip blocks — visually look like CapCut [|  |] */
+.clip-handle {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 44px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Consolas', 'Menlo', 'Monaco', monospace;
+  font-size: 16px; font-weight: 800; line-height: 1;
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 1px 6px rgba(0,0,0,.7);
+  cursor: ew-resize; user-select: none; -webkit-user-select: none;
+  touch-action: none;
+  z-index: 3;
+  transition: background .15s, border-color .15s, transform .1s;
 }
-.clip-block::before { left: 0; border-left: 2px solid rgba(255,255,255,.35); }
-.clip-block::after  { right: 0; border-right: 2px solid rgba(255,255,255,.35); }
-.clip-block { position: relative; }
+.clip-handle-left  { left: 3px; }
+.clip-handle-right { right: 3px; }
+.clip-block.is-active .clip-handle,
+.clip-handle:hover,
+.clip-handle:focus-visible {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(62,166,255,.4);
+}
+.clip-handle:active { transform: translateY(-50%) scale(1.15); background: var(--accent); color:#000; border-color: var(--accent); }
 
 /* Pinch-to-zoom on the video lane; taps still work */
 .lane-video { touch-action: pan-x; }

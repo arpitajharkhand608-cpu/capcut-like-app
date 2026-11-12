@@ -505,19 +505,42 @@ function loadOverlayImage(overlay) {
    Extracted once per clip at ~35% into the visible range,
    then served from memory (zero ongoing decode cost).
    ═════════════════════════════════════════════ */
-function generateClipThumbnail(clip) {
-  if (clip.thumb) return; // already extracted
+const thumbQueue = [];
+let thumbProcessing = false;
+const enqueueThumbnail = (clip) => {
+  if (clip.thumb || clip._thumbQueued) return;
+  clip._thumbQueued = true;
+  thumbQueue.push(clip);
+  processThumbQueue();
+};
+const processThumbQueue = () => {
+  if (thumbProcessing) return;
+  const clip = thumbQueue.shift();
+  if (!clip) return;
+  thumbProcessing = true;
+  // Sequential, throttled — Android low-RAM phones decode one video at a time, never in parallel
+  generateClipThumbnail(clip, () => {
+    clip._thumbQueued = false;
+    thumbProcessing = false;
+    // Small breathing gap between heavy frame decodes
+    window.setTimeout(processThumbQueue, 60);
+  });
+};
+
+function generateClipThumbnail(clip, done) {
+  const finish = () => { if (typeof done === 'function') done(); };
+  if (clip.thumb) { finish(); return; }
   const video = clip.el;
   let painted = false;
 
   const paint = () => {
-    if (painted || clip.thumb) return;
+    if (painted || clip.thumb) { finish(); return; }
     painted = true;
     try {
       const c = document.createElement('canvas');
       c.width = 176; c.height = 99;
       const tctx = c.getContext('2d');
-      if (!tctx) return;
+      if (!tctx) { finish(); return; }
       const vw = video.videoWidth || 320, vh = video.videoHeight || 240;
       const scale = Math.max(c.width / vw, c.height / vh); // cover
       const dw = vw * scale, dh = vh * scale;
@@ -526,18 +549,21 @@ function generateClipThumbnail(clip) {
       renderTimeline();
     } catch (_) { /* detached element or decode failure — thumbnails are optional */ }
     try { video.currentTime = clip.in || 0; } catch (_) { /* nothing to rewind */ }
+    finish();
   };
 
   const attempt = () => {
-    if (clip.thumb || !video.isConnected) return;
+    if (clip.thumb || !video.isConnected) { finish(); return; }
     if (video.readyState >= 2 && !video.seeking) {
       const dur = Number.isFinite(video.duration) ? video.duration : 0;
       const boundary = Number.isFinite(clip.out) ? clip.out : dur;
       const at = clamp(Math.min(dur * 0.35, Math.max(0, boundary - 0.4)), 0.1, Math.max(0.1, dur - 0.1));
       video.addEventListener('seeked', paint, { once: true });
-      try { video.currentTime = at; } catch (_) { video.removeEventListener('seeked', paint); }
+      try { video.currentTime = at; } catch (_) { video.removeEventListener('seeked', paint); paint(); }
     } else {
       video.addEventListener('loadeddata', attempt, { once: true });
+      // Safety net: never hang the queue on a stuck element
+      window.setTimeout(() => { if (!painted) paint(); }, 2500);
     }
   };
   attempt();
@@ -545,7 +571,7 @@ function generateClipThumbnail(clip) {
 
 function createClipElement(ref) {
   const video = document.createElement('video');
-  video.preload = 'auto';
+  video.preload = 'metadata'; // light — only the ACTIVE clip gets upgraded to 'auto' (low-RAM rule)
   video.playsInline = true;
   video.setAttribute('playsinline', '');
   video.setAttribute('webkit-playsinline', '');
@@ -600,7 +626,7 @@ function createClipElement(ref) {
     clip.width = video.videoWidth || 0;
     clip.height = video.videoHeight || 0;
     if (audioCtx) tapClipElement(clip);
-    generateClipThumbnail(clip);
+    enqueueThumbnail(clip);
     refreshTransportBounds();
     renderTimeline();
     drawFrame();
@@ -692,6 +718,7 @@ function activateClip(index, sourceTime, autoplay = false, keepPlayhead = false)
   });
   const clip = activeClip();
   if (!clip || !clip.el) return;
+  clip.el.preload = 'auto'; // the active clip deserves the full buffer; the rest stay lightweight
   if (audioCtx) { tapClipElement(clip); applyTapGains(); }  // lazy tap + idle transition gains
 
   let t;
@@ -795,6 +822,8 @@ function renderTimeline() {
       btn.classList.remove('has-thumb');
     }
     btn.innerHTML =
+      `<span class="clip-handle clip-handle-left" data-trim="in" aria-hidden="true">[</span>` +
+      `<span class="clip-handle clip-handle-right" data-trim="out" aria-hidden="true">]</span>` +
       `<span class="clip-index">CLIP ${i + 1}</span>` +
       `<span class="clip-name">${escapeHtml(clip.name)}</span>` +
       `<span class="clip-dur">${formatTime(clipEffectiveDuration(clip))}</span>`;
@@ -902,6 +931,79 @@ function moveClip(delta) {
   refreshTransportBounds();
   drawFrame();
 }
+
+/* ═════════════════════════════════════════════
+   TOUCH TRIM-DRAG — [ and ] handles on each clip block
+   Drag with finger or mouse to adjust in/out directly on the V1 track.
+   No DOM rebuild during the gesture (mobile stays at 60fps).
+   ═════════════════════════════════════════════ */
+const dragTrimState = { active: null };
+
+clipTimeline.addEventListener('pointerdown', (e) => {
+  const handle = e.target.closest('[data-trim]');
+  if (!handle) return;
+  const block = handle.closest('.clip-block');
+  if (!block) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const index = Array.prototype.indexOf.call(clipTimeline.children, block);
+  const clip = state.clips[index];
+  if (!clip || !clip.el) return;
+
+  commit(); // snapshot PRE-trim so one Undo restores the original bounds
+  const blockWidth = Math.max(24, block.getBoundingClientRect().width);
+  dragTrimState.active = {
+    clip,
+    edge: handle.dataset.trim,
+    startX: e.clientX,
+    origIn: clip.in,
+    origOut: clip.out,
+    secPerPx: Math.max(0.001, (clip.out - clip.in) / blockWidth),
+    block,
+  };
+  try { block.setPointerCapture(e.pointerId); } catch (_) { /* synthetic pointers */ }
+});
+
+clipTimeline.addEventListener('pointermove', (e) => {
+  const s = dragTrimState.active;
+  if (!s) return;
+  e.preventDefault();
+  const delta = (e.clientX - s.startX) * s.secPerPx;
+  const MIN = 0.1;
+  if (s.edge === 'in') {
+    s.clip.in = clamp(s.origIn + delta, 0, s.clip.out - MIN);
+  } else {
+    s.clip.out = clamp(s.origOut + delta, s.clip.in + MIN, s.clip.duration || Infinity);
+  }
+  // Live label update — NO DOM rebuild during the gesture
+  const durEl = s.block.querySelector('.clip-dur');
+  if (durEl) durEl.textContent = formatTime(clipEffectiveDuration(s.clip));
+  try {
+    if (s.edge === 'in') {
+      s.clip.el.currentTime = s.clip.in;
+    } else {
+      s.clip.el.currentTime = clamp(s.clip.el.currentTime, s.clip.in, s.clip.out - 0.01);
+    }
+  } catch (_) { /* element not seekable yet */ }
+  refreshTransportBounds();
+  syncBgmToVideo(true);
+  updateTransportUI();
+  drawFrame();
+});
+
+const endDragTrim = () => {
+  const s = dragTrimState.active;
+  if (!s) return;
+  dragTrimState.active = null;
+  refreshTransportBounds();
+  syncBgmToVideo(true);
+  updateTransportUI();
+  renderTimeline(); // rebuild once at gesture end
+  drawFrame();
+};
+clipTimeline.addEventListener('pointerup', endDragTrim);
+clipTimeline.addEventListener('pointercancel', endDragTrim);
+clipTimeline.addEventListener('pointerleave', endDragTrim);
 
 function removeActiveClip() {
   const i = state.activeClipIndex;
