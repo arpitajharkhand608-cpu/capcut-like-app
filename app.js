@@ -142,6 +142,7 @@ const state = {
   clipIdSeq: 1,
   captionIdSeq: 1,
   overlayIdSeq: 1,
+  timelineZoom: 1,         // mobile/tablet pinch-to-zoom scale for the timeline (0.6–3.0)
 };
 
 const MAX_RENDER_WIDTH = 1280;
@@ -498,6 +499,50 @@ function loadOverlayImage(overlay) {
   overlay.loaded = false;
 }
 
+/* ═════════════════════════════════════════════
+   FILMSTRIP THUMBNAILS — offscreen canvas capture
+   Small JPEG tiles (~176×99) for each V1 clip block.
+   Extracted once per clip at ~35% into the visible range,
+   then served from memory (zero ongoing decode cost).
+   ═════════════════════════════════════════════ */
+function generateClipThumbnail(clip) {
+  if (clip.thumb) return; // already extracted
+  const video = clip.el;
+  let painted = false;
+
+  const paint = () => {
+    if (painted || clip.thumb) return;
+    painted = true;
+    try {
+      const c = document.createElement('canvas');
+      c.width = 176; c.height = 99;
+      const tctx = c.getContext('2d');
+      if (!tctx) return;
+      const vw = video.videoWidth || 320, vh = video.videoHeight || 240;
+      const scale = Math.max(c.width / vw, c.height / vh); // cover
+      const dw = vw * scale, dh = vh * scale;
+      tctx.drawImage(video, (c.width - dw) / 2, (c.height - dh) / 2, dw, dh);
+      clip.thumb = c.toDataURL('image/jpeg', 0.55); // ~4–6 KB per tile
+      renderTimeline();
+    } catch (_) { /* detached element or decode failure — thumbnails are optional */ }
+    try { video.currentTime = clip.in || 0; } catch (_) { /* nothing to rewind */ }
+  };
+
+  const attempt = () => {
+    if (clip.thumb || !video.isConnected) return;
+    if (video.readyState >= 2 && !video.seeking) {
+      const dur = Number.isFinite(video.duration) ? video.duration : 0;
+      const boundary = Number.isFinite(clip.out) ? clip.out : dur;
+      const at = clamp(Math.min(dur * 0.35, Math.max(0, boundary - 0.4)), 0.1, Math.max(0.1, dur - 0.1));
+      video.addEventListener('seeked', paint, { once: true });
+      try { video.currentTime = at; } catch (_) { video.removeEventListener('seeked', paint); }
+    } else {
+      video.addEventListener('loadeddata', attempt, { once: true });
+    }
+  };
+  attempt();
+}
+
 function createClipElement(ref) {
   const video = document.createElement('video');
   video.preload = 'auto';
@@ -555,6 +600,7 @@ function createClipElement(ref) {
     clip.width = video.videoWidth || 0;
     clip.height = video.videoHeight || 0;
     if (audioCtx) tapClipElement(clip);
+    generateClipThumbnail(clip);
     refreshTransportBounds();
     renderTimeline();
     drawFrame();
@@ -737,7 +783,17 @@ function renderTimeline() {
     btn.setAttribute('role', 'listitem');
     btn.setAttribute('aria-label', `Clip ${i + 1}: ${clip.name}`);
     const share = total > 0 ? clipEffectiveDuration(clip) / total : 1;
-    btn.style.flex = `${Math.max(0.08, share)} 1 0%`;
+    const zoom = clamp(state.timelineZoom || 1, 0.6, 3.0);
+    btn.style.flex = `${Math.max(0.08, share * zoom)} 1 0%`;
+    btn.style.minWidth = `${Math.round(88 * zoom)}px`;
+    // Filmstrip thumbnail background — frame captured at clip creation
+    if (clip.thumb) {
+      btn.style.setProperty('--thumb', `url("${clip.thumb}")`);
+      btn.classList.add('has-thumb');
+    } else {
+      btn.style.removeProperty('--thumb');
+      btn.classList.remove('has-thumb');
+    }
     btn.innerHTML =
       `<span class="clip-index">CLIP ${i + 1}</span>` +
       `<span class="clip-name">${escapeHtml(clip.name)}</span>` +
@@ -787,9 +843,26 @@ function splitAtPlayhead() {
     height: clip.height,
   });
   clip.out = t;
+  // Hand the filmstrip thumbnail (a still of the shared source) to the right half too —
+  // same underlying clip, no re-extraction cost, looks like CapCut's filmstrip cut
+  if (clip.thumb) right.thumb = clip.thumb;
   state.clips.splice(state.activeClipIndex + 1, 0, right);
   renderTimeline();
   refreshTransportBounds();
+  // Tactile feedback: neon flash at the cut point + micro-pop on the fresh halves
+  const lanesEl = $('lanesWrap');
+  if (lanesEl) {
+    const total = totalEffectiveDuration() || 1;
+    const xPct = clamp((globalFromClip(state.activeClipIndex, clip.out) / total) * 100, 0, 100);
+    lanesEl.style.setProperty('--split-x', xPct + '%');
+    lanesEl.classList.remove('split-flash');
+    void lanesEl.offsetWidth; // restart animation
+    lanesEl.classList.add('split-flash');
+    const kids = clipTimeline.children;
+    if (kids && kids[state.activeClipIndex]) kids[state.activeClipIndex].classList.add('just-split');
+    if (kids && kids[state.activeClipIndex + 1]) kids[state.activeClipIndex + 1].classList.add('just-split');
+    window.setTimeout(() => lanesEl.classList.remove('split-flash'), 620);
+  }
   drawFrame();
   showToast('Clip split at playhead.');
 }
@@ -2198,6 +2271,74 @@ function jumpToCard(id) {
 Array.from(document.querySelectorAll('.rail-btn[data-jump]')).forEach(btn => {
   btn.addEventListener('click', () => jumpToCard(btn.dataset.jump));
 });
+
+// Canvas/Platform switcher in the mobile dock — flash the top-bar aspect selector
+const dockAspectBtn = $('dockAspectBtn');
+if (dockAspectBtn) dockAspectBtn.addEventListener('click', () => {
+  const ag = $('aspectGroup');
+  if (!ag) return;
+  ag.classList.remove('card-flash');
+  void ag.offsetWidth;
+  ag.classList.add('card-flash');
+  window.setTimeout(() => ag.classList.remove('card-flash'), 1200);
+});
+
+/* ═════════════════════════════════════════════
+   TOUCH PINCH-TO-ZOOM — V1 lane (two-finger scale)
+   Track-level horizontal panning stays native (touch-action: pan-x);
+   the gesture we own is the two-pointer pinch to scale the timeline.
+   ═════════════════════════════════════════════ */
+const laneV1 = $('laneV1');
+const pinchPointers = new Map();
+let pinchStartDistance = null;
+let pinchStartZoom = 1;
+
+function pinchDistance() {
+  const pts = [...pinchPointers.values()];
+  if (pts.length < 2) return 0;
+  return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+}
+
+if (laneV1) {
+  laneV1.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinchPointers.size === 2) {
+      pinchStartDistance = pinchDistance();
+      pinchStartZoom = state.timelineZoom;
+    }
+  });
+  laneV1.addEventListener('pointermove', (e) => {
+    if (!pinchPointers.has(e.pointerId)) return;
+    pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinchPointers.size === 2 && pinchStartDistance > 0) {
+      const d = pinchDistance();
+      if (d > 10) {
+        state.timelineZoom = clamp(pinchStartZoom * (d / pinchStartDistance), 0.6, 3.0);
+        renderTimeline();
+      }
+    }
+  });
+  const endPinch = (e) => {
+    pinchPointers.delete(e.pointerId);
+    if (pinchPointers.size < 2) pinchStartDistance = null;
+  };
+  laneV1.addEventListener('pointerup', endPinch);
+  laneV1.addEventListener('pointercancel', endPinch);
+  laneV1.addEventListener('pointerleave', endPinch);
+  // Double-tap anywhere on the lane resets the timeline zoom to 1×
+  let lastTap = 0;
+  laneV1.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'touch') return;
+    const now = Date.now();
+    if (now - lastTap < 320 && pinchPointers.size === 0) {
+      state.timelineZoom = 1;
+      renderTimeline();
+      showToast('Timeline zoom reset (1×).');
+    }
+    lastTap = now;
+  });
+}
 
 /* ═════════════════════════════════════════════
    Init — aspect canvas, SW

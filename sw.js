@@ -7,7 +7,7 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const VERSION = 'capcut-like-v19';
+const VERSION = 'capcut-like-v23';
 const SHELL_CACHE = `${VERSION}-shell`;
 const CDN_CACHE   = `${VERSION}-cdn`;
 
