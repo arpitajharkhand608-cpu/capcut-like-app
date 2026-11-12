@@ -397,6 +397,16 @@
         </button>
       </div>
 
+      <div class="toolbar-group">
+        <span class="toolbar-label">Zoom</span>
+        <button id="zoomOutBtn" class="tool-btn" type="button" title="Zoom out timeline" aria-label="Zoom out">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button id="zoomInBtn" class="tool-btn" type="button" title="Zoom in timeline" aria-label="Zoom in">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+
       <div class="toolbar-spacer"></div>
 
       <div class="toolbar-group">
@@ -418,21 +428,23 @@
         <div class="lane-label"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg>T1<span>Text</span></div>
       </div>
 
-      <div class="lanes-wrap" id="lanesWrap">
-        <div class="track-lane lane-video" id="laneV1" role="list" aria-label="Video track">
-          <div id="clipTimeline" class="clip-timeline"></div>
-          <p id="timelineEmpty" class="timeline-empty">Timeline is empty — import clips, then split, trim and reorder here.</p>
+      <div class="lanes-wrap" id="lanesWrap" aria-label="Scrollable timeline — pinch to zoom, scroll to scrub">
+        <div class="lanes-inner" id="lanesInner">
+          <div class="track-lane lane-video" id="laneV1" role="list" aria-label="Video track">
+            <div id="clipTimeline" class="clip-timeline"></div>
+            <p id="timelineEmpty" class="timeline-empty">Timeline is empty — import clips, then split, trim and reorder here.</p>
+          </div>
+
+          <div class="track-lane lane-audio">
+            <div id="laneA1" class="lane-chip-row"></div>
+          </div>
+
+          <div class="track-lane lane-text">
+            <div id="laneT1" class="lane-chip-row"></div>
+          </div>
         </div>
 
-        <div class="track-lane lane-audio">
-          <div id="laneA1" class="lane-chip-row"></div>
-        </div>
-
-        <div class="track-lane lane-text">
-          <div id="laneT1" class="lane-chip-row"></div>
-        </div>
-
-        <div class="playhead" id="playheadMarker" aria-hidden="true"><span class="playhead-knob"></span></div>
+        <div class="playhead playhead-center" id="playheadMarker" aria-hidden="true"><span class="playhead-knob"></span></div>
       </div>
     </div>
 

@@ -30,9 +30,13 @@ const moveRightBtn = $('moveRightBtn');
 const removeClipBtn= $('removeClipBtn');
 const activeClipInfo = $('activeClipInfo');
 const clipPool     = $('clipPool');
+const lanesWrap     = $('lanesWrap');
 const playheadMarker = $('playheadMarker');
-const laneA1       = $('laneA1');
-const laneT1       = $('laneT1');
+const lanesInner     = $('lanesInner');
+const zoomOutBtn     = $('zoomOutBtn');
+const zoomInBtn      = $('zoomInBtn');
+const laneA1         = $('laneA1');
+const laneT1         = $('laneT1');
 
 const bgmChip      = $('bgmChip');
 const bgmName      = $('bgmName');
@@ -142,7 +146,8 @@ const state = {
   clipIdSeq: 1,
   captionIdSeq: 1,
   overlayIdSeq: 1,
-  timelineZoom: 1,         // mobile/tablet pinch-to-zoom scale for the timeline (0.6–3.0)
+  pxPerSec: 120,           // horizontal pixels per second of timeline (zoom-level)
+  timelineSync: false,     // guard flag to prevent scroll→seek feedback loops
 };
 
 const MAX_RENDER_WIDTH = 1280;
@@ -509,6 +514,9 @@ const thumbQueue = [];
 let thumbProcessing = false;
 const enqueueThumbnail = (clip) => {
   if (clip.thumb || clip._thumbQueued) return;
+  // Mobile/low-RAM devices: skip offscreen frame extraction — every frame decode costs CPU + GC pressure.
+  // Clips render as lightweight colored cards with filename + duration instead.
+  if (!window.matchMedia('(min-width: 768px)').matches) return;
   clip._thumbQueued = true;
   thumbQueue.push(clip);
   processThumbQueue();
@@ -799,41 +807,89 @@ function tickPlayhead() {
 /* ═════════════════════════════════════════════
    TIMELINE UI — clip blocks + inspector tools
    ═════════════════════════════════════════════ */
-function renderTimeline() {
-  clipTimeline.innerHTML = '';
-  // Proportional widths like CapCut: each block's share of the lane ≈ its duration share
+let lanesWidthLimit = 0;
+
+function layoutTimeline() {
+  if (!clipTimeline) return;
   const total = totalEffectiveDuration();
-  state.clips.forEach((clip, i) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'clip-block' + (i === state.activeClipIndex ? ' is-active' : '');
-    btn.setAttribute('role', 'listitem');
-    btn.setAttribute('aria-label', `Clip ${i + 1}: ${clip.name}`);
-    const share = total > 0 ? clipEffectiveDuration(clip) / total : 1;
-    const zoom = clamp(state.timelineZoom || 1, 0.6, 3.0);
-    btn.style.flex = `${Math.max(0.08, share * zoom)} 1 0%`;
-    btn.style.minWidth = `${Math.round(88 * zoom)}px`;
-    // Filmstrip thumbnail background — frame captured at clip creation
-    if (clip.thumb) {
-      btn.style.setProperty('--thumb', `url("${clip.thumb}")`);
-      btn.classList.add('has-thumb');
-    } else {
+  const pxPerSec = clamp(state.pxPerSec || 120, 30, 420);
+  const pxPerClip = 24; // min block width
+  const isThumbnailsEnabled = window.matchMedia('(min-width: 768px)').matches;
+
+  // Size the inner canvas: wide enough for all clips, filling the viewport width if short
+  const naturalWidth = Math.max(1, Math.ceil(total * pxPerSec));
+  const innerWidth = Math.max(naturalWidth, lanesWrap.clientWidth || 200);
+  lanesInner.style.width = innerWidth + 'px';
+  clipTimeline.style.width = innerWidth + 'px';
+
+  let start = 0;
+  for (const clip of state.clips) {
+    const dur = clipEffectiveDuration(clip);
+    const left = start * pxPerSec;
+    const width = Math.max(pxPerClip, dur * pxPerSec);
+    clip.x = left;
+    clip.width = width;
+    start += dur;
+  }
+
+  for (const clip of state.clips) {
+    const btn = clipTimeline.querySelector(`[data-clip-id="${clip.id}"]`);
+    if (!btn) continue;
+    btn.style.left = clip.x + 'px';
+    btn.style.width = clip.width + 'px';
+    // Mobile: never set thumbnails → zero-lag color-coded card with filename + duration
+    if (!isThumbnailsEnabled) {
       btn.style.removeProperty('--thumb');
       btn.classList.remove('has-thumb');
     }
+  }
+}
+
+function renderTimeline() {
+  clipTimeline.innerHTML = '';
+  if (!state.clips.length) { layoutTimeline(); return; }
+
+  // Absolute positioning with a fixed center playhead — the exact CapCut approach:
+  // the playhead is pinned, the lane scrolls. No flex-grow hacks.
+  state.pxPerSec = clamp(state.pxPerSec || 120, 30, 420);
+  const isThumbnailsEnabled = window.matchMedia('(min-width: 768px)').matches;
+
+  state.clips.forEach((clip, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.clipId = String(clip.id);
+    btn.className = 'clip-block' + (i === state.activeClipIndex ? ' is-active' : '');
+    btn.setAttribute('role', 'listitem');
+    btn.setAttribute('aria-label', `Clip ${i + 1}: ${clip.name}`);
+
+    const isThumbnailsEnabled = window.matchMedia('(min-width: 768px)').matches;
+
+    // Mobile: skip thumbnails entirely — solid color-coded card with filename + duration,
+    // zero GPU decode cost on low-RAM Android devices (Redmi 7A-safe).
+    if (isThumbnailsEnabled && clip.thumb) {
+      btn.style.setProperty('--thumb', `url("${clip.thumb}")`);
+      btn.classList.add('has-thumb');
+    } else {
+      btn.classList.add('rail-text');
+    }
+
     btn.innerHTML =
       `<span class="clip-handle clip-handle-left" data-trim="in" aria-hidden="true">[</span>` +
       `<span class="clip-handle clip-handle-right" data-trim="out" aria-hidden="true">]</span>` +
-      `<span class="clip-index">CLIP ${i + 1}</span>` +
+      `<span class="clip-index">${i + 1}</span>` +
       `<span class="clip-name">${escapeHtml(clip.name)}</span>` +
       `<span class="clip-dur">${formatTime(clipEffectiveDuration(clip))}</span>`;
-    btn.addEventListener('click', () => {
+
+    btn.addEventListener('click', (e) => {
+      if (dragTrimState.active) return; // ignore click after a trim drag
       commit();
       activateClip(i, clip.in, false);
       drawFrame();
     });
     clipTimeline.appendChild(btn);
   });
+  layoutTimeline();
+
   const clip = activeClip();
   activeClipInfo.textContent = clip
     ? `Clip ${state.activeClipIndex + 1}/${state.clips.length} · “${clip.name}” · in ${clip.in.toFixed(1)}s · out ${clip.out.toFixed(1)}s · ${formatTime(clipEffectiveDuration(clip))} selected`
@@ -1908,6 +1964,24 @@ function updateVideoMeta() {
   refreshTransportBounds();
 }
 
+function updateTimelineZoomUI() {
+  const label = document.getElementById('timelineZoomLabel');
+  if (label) label.textContent = `${state.pxPerSec.toFixed(0)} px/s`;
+}
+
+/** Sync the horizontal scroll so the global playhead sits at the CENTER of the visible lane. */
+function syncTimelineScrollToTime() {
+  if (!lanesWrap) return;
+  const total = totalEffectiveDuration();
+  if (total <= 0) return;
+  const t = getGlobalTime();
+  const target = clamp(t * state.pxPerSec - lanesWrap.clientWidth / 2, 0, Math.max(0, lanesWrap.scrollWidth - lanesWrap.clientWidth));
+  state.timelineSync = true;
+  lanesWrap.scrollLeft = target;
+  // Scroll event fires synchronously in most browsers; clear flag right after
+  window.setTimeout(() => { state.timelineSync = false; }, 50);
+}
+
 function updateTransportUI() {
   const clip = activeClip();
   const playing = clip && clip.el && !clip.el.paused && !clip.el.ended;
@@ -1917,10 +1991,10 @@ function updateTransportUI() {
   timecodeDisplay.textContent = `${formatTime(getGlobalTime())} / ${formatTime(total)}`;
   seekBar.max = String(Math.max(1, Math.round(total * 1000)));
   seekBar.value = String(clamp(Math.round(getGlobalTime() * 1000), 0, Math.max(1, Math.round(total * 1000))));
-  if (playheadMarker) {
-    const pct = total > 0 ? clamp((getGlobalTime() / total) * 100, 0, 100) : 0;
-    playheadMarker.style.left = pct + '%';
-  }
+  if (playheadMarker) playheadMarker.style.left = '50%'; // center playhead is positional, not time-based
+  updateTimelineZoomUI();
+  layoutTimeline(); // recompute block geometry for current zoom + pixel ratio
+  syncTimelineScrollToTime();
 }
 
 function togglePlay() {
@@ -2305,8 +2379,6 @@ stageFrame.addEventListener('drop', (e) => {
 /* ═════════════════════════════════════════════
    TRACK LANES — A1 (audio) and T1 (text) mirrors
    ═════════════════════════════════════════════ */
-const lanesWrap = $('lanesWrap');
-
 function shorten(text, max) {
   const s = String(text);
   return s.length > max ? s.slice(0, max - 1) + '…' : s;
@@ -2409,7 +2481,7 @@ if (laneV1) {
     pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinchPointers.size === 2) {
       pinchStartDistance = pinchDistance();
-      pinchStartZoom = state.timelineZoom;
+      pinchStartZoom = state.pxPerSec;
     }
   });
   laneV1.addEventListener('pointermove', (e) => {
@@ -2418,8 +2490,10 @@ if (laneV1) {
     if (pinchPointers.size === 2 && pinchStartDistance > 0) {
       const d = pinchDistance();
       if (d > 10) {
-        state.timelineZoom = clamp(pinchStartZoom * (d / pinchStartDistance), 0.6, 3.0);
-        renderTimeline();
+        state.pxPerSec = clamp(pinchStartZoom * (d / pinchStartDistance), 30, 420);
+        layoutTimeline();
+        syncTimelineScrollToTime();
+        updateTimelineZoomUI();
       }
     }
   });
@@ -2430,18 +2504,50 @@ if (laneV1) {
   laneV1.addEventListener('pointerup', endPinch);
   laneV1.addEventListener('pointercancel', endPinch);
   laneV1.addEventListener('pointerleave', endPinch);
-  // Double-tap anywhere on the lane resets the timeline zoom to 1×
+  // Double-tap anywhere on the lane resets zoom to default
   let lastTap = 0;
   laneV1.addEventListener('pointerup', (e) => {
     if (e.pointerType !== 'touch') return;
     const now = Date.now();
     if (now - lastTap < 320 && pinchPointers.size === 0) {
-      state.timelineZoom = 1;
-      renderTimeline();
-      showToast('Timeline zoom reset (1×).');
+      state.pxPerSec = 120;
+      layoutTimeline();
+      syncTimelineScrollToTime();
+      updateTimelineZoomUI();
+      showToast('Timeline zoom reset.');
     }
     lastTap = now;
   });
+}
+
+// Zoom buttons (+ / −)
+if (zoomInBtn) zoomInBtn.addEventListener('click', () => {
+  state.pxPerSec = clamp(state.pxPerSec * 1.4, 30, 420);
+  layoutTimeline();
+  syncTimelineScrollToTime();
+  updateTimelineZoomUI();
+});
+if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => {
+  state.pxPerSec = clamp(state.pxPerSec / 1.4, 30, 420);
+  layoutTimeline();
+  syncTimelineScrollToTime();
+  updateTimelineZoomUI();
+});
+
+// Scroll the lanes to scrub the global playhead (CapCut-style)
+if (lanesWrap) {
+  lanesWrap.addEventListener('scroll', () => {
+    if (state.timelineSync) { state.timelineSync = false; return; }
+    const total = totalEffectiveDuration();
+    if (total <= 0) return;
+    const next = clamp((lanesWrap.scrollLeft + lanesWrap.clientWidth / 2) / state.pxPerSec, 0, total);
+    const target = clipAtGlobal(next);
+    activateClip(target.index, target.sourceTime, false);
+    syncBgmToVideo(true);
+    // lightweight: only update timecode + seekbar, not the full render layout
+    timecodeDisplay.textContent = `${formatTime(getGlobalTime())} / ${formatTime(total)}`;
+    seekBar.value = String(clamp(Math.round(getGlobalTime() * 1000), 0, Math.max(1, Math.round(total * 1000))));
+  }, { passive: true });
 }
 
 /* ═════════════════════════════════════════════
