@@ -1,0 +1,21 @@
+{
+  "name": "capcut-like-app — Browser Video Editor",
+  "short_name": "capcut-like",
+  "description": "Lightweight, 100% free, offline-ready CapCut-style video editor. Import, mix BGM, add captions and export locally — no upload, no backend, no watermark.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0b0f",
+  "theme_color": "#0b0b0f",
+  "lang": "en",
+  "categories": ["video", "photo", "utilities"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

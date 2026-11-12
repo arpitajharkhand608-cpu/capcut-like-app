@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#121212" />
+  <meta name="description" content="capcut-like-app — a professional, multi-track, 100% free, offline-ready browser video editor. Multi-clip timeline, split/trim, overlays, auto-enhance, auto-captions, high-bitrate export. No uploads, no backend." />
+  <title>capcut-like-app — Studio Video Editor</title>
+
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+
+  <!-- Tailwind CDN (progressive enhancement; style.css is a complete standalone fallback) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="bg-[#121212] text-slate-100 antialiased">
+
+  <!-- ══════════ TOP BAR (studio chrome) ══════════ -->
+  <header class="topbar">
+    <div class="brand">
+      <img src="icon.svg" alt="capcut-like-app logo" class="brand-icon" width="28" height="28" />
+      <div class="brand-text">
+        <h1>capcut-like-app</h1>
+        <span>Studio · offline · local</span>
+      </div>
+    </div>
+
+    <!-- Aspect ratio — center of the top bar, like CapCut -->
+    <div class="aspect-switch" id="aspectGroup" role="group" aria-label="Canvas aspect ratio">
+      <button type="button" class="aspect-pill is-active" data-aspect="16:9" aria-pressed="true" title="16:9 — YouTube landscape">
+        <span class="ratio-glyph ratio-169"></span><em>16:9</em>
+      </button>
+      <button type="button" class="aspect-pill" data-aspect="1:1" aria-pressed="false" title="1:1 — Instagram square">
+        <span class="ratio-glyph ratio-11"></span><em>1:1</em>
+      </button>
+      <button type="button" class="aspect-pill" data-aspect="9:16" aria-pressed="false" title="9:16 — Reels / Shorts / TikTok">
+        <span class="ratio-glyph ratio-916"></span><em>9:16</em>
+      </button>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="exportTopBtn" class="btn btn-export" type="button" disabled>
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Export</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ══════════ STUDIO AREA: rail · preview · panel ══════════ -->
+  <main class="studio">
+
+    <nav class="tool-rail" aria-label="Quick tools">
+      <button type="button" class="rail-btn" data-jump="card-media" title="Import media">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M18 3H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M12 12v6"/><path d="m9.5 15.5 2.5 2.5 2.5-2.5"/></svg>
+        <span>Import</span>
+      </button>
+      <button type="button" class="rail-btn" data-jump="card-audio" title="Background music & voice">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>BGM</span>
+      </button>
+      <button type="button" class="rail-btn" data-jump="card-watermark" title="Text and watermark layer">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19 16 6l3 3L10 19"/><path d="M12 11l2.5 2.5"/><path d="M5 19h7"/></svg>
+        <span>Text</span>
+      </button>
+      <button type="button" class="rail-btn" data-jump="card-format" title="Transitions and motion">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="9" height="14" rx="2"/><rect x="13" y="5" width="9" height="14" rx="2"/><path d="M12.5 12h3"/></svg>
+        <span>Transition</span>
+      </button>
+      <button type="button" class="rail-btn" data-jump="card-captions" title="Auto captions &amp; titles">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg>
+        <span>Captions</span>
+      </button>
+    </nav>
+
+    <!-- ══════════ CENTER: MASTER PREVIEW PLAYER ══════════ -->
+    <section class="stage-panel" aria-label="Master preview">
+      <div class="stage-frame" id="stageFrame" style="aspect-ratio: 16 / 9;">
+        <canvas id="previewCanvas" width="1280" height="720" aria-label="Master preview canvas. Drag overlays and the watermark to reposition them."></canvas>
+
+        <!-- Empty-state overlay -->
+        <div id="emptyState" class="empty-state">
+          <svg viewBox="0 0 24 24" width="52" height="52" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14.5 4 4 14.5V20h5.5L20 9.5"/><path d="m12.5 6 5.5 5.5"/><path d="M6 20h4"/>
+          </svg>
+          <h2>Create your first video</h2>
+          <p>Videos, music, images and auto captions — one unified import, everything processed on-device.</p>
+          <button id="emptyImportBtn" class="btn btn-primary btn-lg" type="button">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Add Media
+          </button>
+        </div>
+
+        <!-- Export progress overlay -->
+        <div id="exportOverlay" class="export-overlay" hidden>
+          <div class="export-card">
+            <div class="spinner" aria-hidden="true"></div>
+            <h3>Rendering video…</h3>
+            <p id="exportPhase">Mixing audio &amp; drawing frames in real time</p>
+            <div class="progress-track"><div id="exportProgressBar" class="progress-bar" style="width:0%"></div></div>
+            <span id="exportPercent" class="export-percent">0%</span>
+            <small>Keep this tab in the foreground until it finishes.</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transport / timecode -->
+      <div class="transport">
+        <button id="playPauseBtn" class="icon-btn transport-play" type="button" aria-label="Play or pause" title="Play / Pause (Space)" disabled>
+          <svg id="playIcon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a.8.8 0 0 0 1.2.7l10.4-6.5a.8.8 0 0 0 0-1.4L9.2 4.8a.8.8 0 0 0-1.2.7z"/></svg>
+          <svg id="pauseIcon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" style="display:none"><rect x="6.5" y="5" width="4.2" height="14" rx="1.2"/><rect x="13.3" y="5" width="4.2" height="14" rx="1.2"/></svg>
+        </button>
+        <span id="timecodeDisplay" class="timecode-label" aria-label="Timeline timecode">00:00 / 00:00</span>
+        <input id="seekBar" class="seek-bar" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" disabled />
+        <button id="muteBtn" class="icon-btn" type="button" aria-label="Mute or unmute audio" title="Mute / Unmute" disabled>
+          <svg id="volIcon" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"></polygon><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.4 5.6a9 9 0 0 1 0 12.8"/></svg>
+          <svg id="mutedIcon" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"></polygon><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- ══════════ RIGHT: TOOL PANEL ══════════ -->
+    <aside class="tool-panel" aria-label="Editing tools">
+
+      <!-- ── 1. IMPORT ── -->
+      <section class="card" id="card-media">
+        <div class="card-head">
+          <span class="step-badge">1</span>
+          <h2>Import Media</h2>
+        </div>
+        <input id="fileInput" type="file" accept="video/*,audio/*,image/*" multiple hidden />
+        <button id="addMediaBtn" class="btn btn-primary btn-block btn-lg add-media-btn" type="button" title="Pick videos, music and images in one go">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Add Media
+        </button>
+        <p class="hint">One picker for everything: <strong>videos</strong> (stack on the timeline), <strong>images</strong> (overlay layers), <strong>audio</strong> (BGM / voiceover). Or drag &amp; drop onto the preview.</p>
+        <p id="videoMeta" class="meta-line">No media loaded — drop files anywhere on the stage</p>
+      </section>
+
+      <!-- ── 2. AUDIO ── -->
+      <section class="card" id="card-audio">
+        <div class="card-head">
+          <span class="step-badge">2</span>
+          <h2>Audio &amp; Auto Enhance</h2>
+        </div>
+
+        <div id="bgmChip" class="chip-row" hidden>
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          <span id="bgmName" class="chip-name">track.mp3</span>
+          <button id="removeBgmBtn" class="chip-remove" type="button" aria-label="Remove background music" title="Remove BGM">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+
+        <label class="slider-row" for="videoVolume">
+          <span>Clip audio</span>
+          <input id="videoVolume" type="range" min="0" max="100" value="100" step="1" />
+          <output id="videoVolumeVal">100</output>
+        </label>
+        <label class="slider-row" for="bgmVolume">
+          <span>BGM</span>
+          <input id="bgmVolume" type="range" min="0" max="100" value="70" step="1" />
+          <output id="bgmVolumeVal">70</output>
+        </label>
+
+        <div class="auto-enh" role="note" aria-label="Automatic audio enhancement is active">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span><strong>Auto Enhance is ON</strong><small>HighPass 80 Hz kills hiss &amp; rumble · Compressor (−18 dB · 10:1) normalizes loudness &amp; sharpens speech — zero knobs, always applied.</small></span>
+        </div>
+      </section>
+
+      <!-- ── 3. OVERLAYS ── -->
+      <section class="card">
+        <div class="card-head">
+          <span class="step-badge">3</span>
+          <h2>Image / Sticker Overlays</h2>
+        </div>
+        <ul id="overlayList" class="overlay-list" aria-label="Overlay layers"></ul>
+        <p id="overlayEmpty" class="hint">No overlays yet — PNG/JPG logos, emojis and stickers. Drag them directly on the video to position; layers render bottom-to-top in this order.</p>
+        <div id="overlayTools" class="overlay-tools" hidden>
+          <label class="slider-row" for="overlayScale">
+            <span>Size</span>
+            <input id="overlayScale" type="range" min="5" max="100" value="25" step="1" />
+            <output id="overlayScaleVal">25%</output>
+          </label>
+          <div class="overlay-btn-row">
+            <button id="overlayFrontBtn" class="chip-btn" type="button" title="Bring overlay forward">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="12 19 12 5"/><polyline points="5 12 12 5 19 12"/></svg>
+              Front
+            </button>
+            <button id="overlayBackBtn" class="chip-btn" type="button" title="Send overlay backward">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="12 5 12 19"/><polyline points="5 12 12 19 19 12"/></svg>
+              Back
+            </button>
+            <button id="overlayDeleteBtn" class="chip-btn chip-danger" type="button" title="Delete overlay">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              Delete
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── 4. CAPTIONS / TEXT ── -->
+      <section class="card" id="card-captions">
+        <div class="card-head">
+          <span class="step-badge">4</span>
+          <h2>Captions &amp; Titles</h2>
+        </div>
+
+        <div class="autocap-row">
+          <button id="autoCaptionBtn" class="btn autocap-btn" type="button" disabled title="Auto-Caption: transcribe speech via Web Speech API">
+            <svg id="micIcon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            <span id="autoCaptionLabel">Auto-Caption</span>
+          </button>
+          <select id="autoCaptionLang" class="select-input" aria-label="Auto-caption language">
+            <option value="en-US" selected>English (US)</option>
+            <option value="en-IN">English (India)</option>
+            <option value="hi-IN">हिन्दी</option>
+            <option value="es-ES">Español</option>
+            <option value="fr-FR">Français</option>
+            <option value="de-DE">Deutsch</option>
+            <option value="pt-BR">Português</option>
+            <option value="id-ID">Bahasa Indonesia</option>
+          </select>
+        </div>
+        <p id="autoCaptionStatus" class="hint">Tap Auto-Caption and let the video play audibly — the browser transcribes speech (mic permission required) and syncs each line to the timeline.</p>
+
+        <span class="field-label">Caption style</span>
+        <div class="segmented" role="group" aria-label="Caption style" id="captionStyleGroup">
+          <button type="button" class="seg-btn is-active" data-captionstyle="classic" aria-pressed="true">Classic</button>
+          <button type="button" class="seg-btn" data-captionstyle="box" aria-pressed="false">Instagram Bold Box</button>
+        </div>
+
+        <label class="field-label" for="captionText">Caption text</label>
+        <textarea id="captionText" class="text-input" rows="2" maxlength="220" placeholder="Type your caption…"></textarea>
+
+        <div class="control-grid">
+          <label class="control-cell" for="captionColor">
+            <span>Color</span>
+            <input id="captionColor" type="color" value="#ffffff" />
+          </label>
+          <label class="control-cell" for="captionSize">
+            <span>Size <output id="captionSizeVal">42</output></span>
+            <input id="captionSize" type="range" min="18" max="96" value="42" step="1" />
+          </label>
+        </div>
+
+        <div class="control-grid">
+          <div class="control-cell">
+            <span>Position</span>
+            <div class="segmented" role="group" aria-label="Caption position">
+              <button type="button" class="seg-btn" data-position="top">Top</button>
+              <button type="button" class="seg-btn is-active" data-position="middle">Middle</button>
+              <button type="button" class="seg-btn" data-position="bottom">Bottom</button>
+            </div>
+          </div>
+          <div class="control-cell">
+            <span>Style</span>
+            <div class="segmented" role="group" aria-label="Caption weight">
+              <button type="button" id="boldToggle" class="seg-btn is-active" aria-pressed="true"><strong>B</strong> Bold</button>
+              <button type="button" id="outlineToggle" class="seg-btn is-active" aria-pressed="true">Outline</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="caption-actions">
+          <button id="addCaptionBtn" class="btn btn-primary" type="button" title="Add caption at full timeline length">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add caption
+          </button>
+          <button id="updateCaptionBtn" class="btn" type="button" hidden>Update selected</button>
+        </div>
+
+        <ul id="captionList" class="caption-list" aria-label="Captions on the timeline"></ul>
+        <p id="captionEmpty" class="hint">No captions yet. Timed lines from Auto-Caption appear with a ⏱ range; plain captions show for the whole video.</p>
+      </section>
+
+      <!-- ── 5. WATERMARK ── -->
+      <section class="card" id="card-watermark">
+        <div class="card-head">
+          <span class="step-badge">5</span>
+          <h2>Text / Watermark</h2>
+          <span class="switch switch-inline" title="Show or hide the watermark">
+            <input id="watermarkEnabled" type="checkbox" aria-label="Toggle watermark" />
+            <span class="switch-track"></span>
+          </span>
+        </div>
+        <div id="watermarkTools" class="watermark-tools" hidden>
+          <label class="field-label" for="watermarkText">Watermark text</label>
+          <input id="watermarkText" type="text" class="text-input watermark-input" maxlength="60" value="@capcut-like-app" placeholder="@yourhandle or © Brand" />
+          <div class="control-grid">
+            <label class="control-cell" for="watermarkColor">
+              <span>Color</span>
+              <input id="watermarkColor" type="color" value="#ffffff" />
+            </label>
+            <label class="control-cell" for="watermarkSize">
+              <span>Size <output id="watermarkSizeVal">26</output></span>
+              <input id="watermarkSize" type="range" min="12" max="72" value="26" step="1" />
+            </label>
+          </div>
+          <label class="slider-row" for="watermarkOpacity">
+            <span>Opacity</span>
+            <input id="watermarkOpacity" type="range" min="10" max="100" value="70" step="5" />
+            <output id="watermarkOpacityVal">70%</output>
+          </label>
+          <span class="field-label">Snap to corner (drag freely on the video)</span>
+          <div class="segmented" role="group" aria-label="Watermark position presets" id="watermarkPosGroup">
+            <button type="button" class="seg-btn icon-chip" data-wmpos="tl" title="Top-left" aria-label="Watermark top-left"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4h6M4 4v6M4 4l6 6"/></svg></button>
+            <button type="button" class="seg-btn icon-chip" data-wmpos="tr" title="Top-right" aria-label="Watermark top-right"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 4h-6M20 4v6M20 4l-6 6"/></svg></button>
+            <button type="button" class="seg-btn icon-chip" data-wmpos="center" title="Center" aria-label="Watermark centered"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg></button>
+            <button type="button" class="seg-btn icon-chip" data-wmpos="bl" title="Bottom-left" aria-label="Watermark bottom-left"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h6M4 20v-6M4 20l6-6"/></svg></button>
+            <button type="button" class="seg-btn icon-chip" data-wmpos="br" title="Bottom-right" aria-label="Watermark bottom-right"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 20h-6M20 20v-6M20 20l-6-6"/></svg></button>
+          </div>
+        </div>
+        <p class="hint">Persistent text layer drawn on every frame — handles and brand marks. <strong>Drag it straight on the video.</strong></p>
+      </section>
+
+      <!-- ── 6. FORMAT (speed & transitions) ── -->
+      <section class="card" id="card-format">
+        <div class="card-head">
+          <span class="step-badge">6</span>
+          <h2>Speed &amp; Transitions</h2>
+        </div>
+
+        <span class="field-label">Playback speed</span>
+        <div class="segmented" role="group" aria-label="Playback speed" id="speedGroup">
+          <button type="button" class="seg-btn" data-speed="0.5" aria-pressed="false">0.5×</button>
+          <button type="button" class="seg-btn is-active" data-speed="1" aria-pressed="true">1×</button>
+          <button type="button" class="seg-btn" data-speed="1.5" aria-pressed="false">1.5×</button>
+          <button type="button" class="seg-btn" data-speed="2" aria-pressed="false">2×</button>
+        </div>
+
+        <span class="field-label">Clip transition (between clips)</span>
+        <div class="segmented" role="group" aria-label="Clip transition" id="transitionGroup">
+          <button type="button" class="seg-btn is-active" data-transition="none" aria-pressed="true" title="Hard cut at every boundary">None</button>
+          <button type="button" class="seg-btn" data-transition="dissolve" aria-pressed="false" title="Cross dissolve — 0.65 s video + audio blend">Dissolve</button>
+          <button type="button" class="seg-btn" data-transition="fade" aria-pressed="false" title="Dip to black — 0.65 s">Fade</button>
+        </div>
+        <p class="hint">Transitions ride the incoming clip in 0.65 s before each cut with an equal-power audio crossfade — in preview and export.</p>
+      </section>
+
+      <!-- ── 7. EXPORT ── -->
+      <section class="card card-export">
+        <div class="card-head">
+          <span class="step-badge">7</span>
+          <h2>Export Video</h2>
+        </div>
+        <div class="export-specs" aria-label="Export specification">
+          <span class="spec-pill">8 Mbps H.264/VP9</span>
+          <span class="spec-pill">192 kbps audio</span>
+          <span class="spec-pill">≤ 1280 px</span>
+        </div>
+        <p class="hint">High-bitrate local render — mixed audio, overlays, watermark and captions baked in. 100% on-device: no upload, no forced branding, no backend.</p>
+        <button id="exportBtn" class="btn btn-primary btn-block btn-lg" type="button" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export &amp; Download
+        </button>
+      </section>
+
+    </aside>
+  </main>
+
+  <!-- ══════════ BOTTOM: MULTI-TRACK TIMELINE ══════════ -->
+  <footer class="timeline-bar" id="timelineBar" aria-label="Timeline">
+
+    <!-- Timeline toolbar -->
+    <div class="timeline-toolbar">
+      <div class="toolbar-group">
+        <span class="toolbar-label">Cut</span>
+        <button id="splitBtn" class="tool-btn" type="button" title="Scissors — Split at playhead (S)" aria-label="Split at playhead" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+          <span>Split</span>
+        </button>
+        <button id="removeClipBtn" class="tool-btn tool-btn-danger" type="button" title="Delete clip from timeline" aria-label="Delete clip" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          <span>Delete</span>
+        </button>
+      </div>
+
+      <div class="toolbar-group">
+        <span class="toolbar-label">Clip</span>
+        <button id="trimInBtn" class="tool-btn" type="button" title="Trim clip start to playhead" aria-label="Trim in" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="11 17 6 12 11 7"/><line x1="18" y1="5" x2="18" y2="19"/></svg>
+          <span>In</span>
+        </button>
+        <button id="trimOutBtn" class="tool-btn" type="button" title="Trim clip end to playhead" aria-label="Trim out" disabled>
+          <span>Out</span>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="13 17 18 12 13 7"/><line x1="6" y1="5" x2="6" y2="19"/></svg>
+        </button>
+        <button id="moveLeftBtn" class="tool-btn" type="button" title="Move clip earlier" aria-label="Move clip earlier" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button id="moveRightBtn" class="tool-btn" type="button" title="Move clip later" aria-label="Move clip later" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      <div class="toolbar-spacer"></div>
+
+      <div class="toolbar-group">
+        <span class="toolbar-label">Edit</span>
+        <button id="undoBtn" class="tool-btn" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        </button>
+        <button id="redoBtn" class="tool-btn" type="button" title="Redo (Ctrl+Y)" aria-label="Redo" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Track lanes + playhead -->
+    <div class="timeline-body">
+      <div class="track-gutter" aria-hidden="true">
+        <div class="lane-label"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>V1<span>Video</span></div>
+        <div class="lane-label"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>A1<span>Audio</span></div>
+        <div class="lane-label"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg>T1<span>Text</span></div>
+      </div>
+
+      <div class="lanes-wrap" id="lanesWrap">
+        <div class="playhead" id="playheadMarker" aria-hidden="true"><span class="playhead-knob"></span></div>
+
+        <div class="track-lane lane-video" role="list" aria-label="Video track">
+          <div id="clipTimeline" class="clip-timeline"></div>
+          <p id="timelineEmpty" class="timeline-empty">Timeline is empty — import clips, then split, trim and reorder here.</p>
+        </div>
+
+        <div class="track-lane lane-audio">
+          <div id="laneA1" class="lane-chip-row"></div>
+        </div>
+
+        <div class="track-lane lane-text">
+          <div id="laneT1" class="lane-chip-row"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspection line -->
+    <div class="timeline-foot">
+      <p class="hint" id="activeClipInfo"></p>
+      <p class="hint timeline-hint">Live preview = exactly what gets exported.</p>
+    </div>
+  </footer>
+
+  <!-- Hidden media pool: one <video> per timeline clip + BGM audio -->
+  <div id="clipPool" hidden aria-hidden="true"></div>
+  <audio id="bgmAudio" preload="auto" loop></audio>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
