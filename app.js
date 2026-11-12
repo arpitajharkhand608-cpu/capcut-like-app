@@ -514,20 +514,21 @@ const thumbQueue = [];
 let thumbProcessing = false;
 const enqueueThumbnail = (clip) => {
   if (clip.thumb || clip._thumbQueued) return;
-  // Mobile/low-RAM devices: skip offscreen frame extraction — every frame decode costs CPU + GC pressure.
-  // Clips render as lightweight colored cards with filename + duration instead.
-  if (!window.matchMedia('(min-width: 768px)').matches) return;
+  const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+  // Mobile gets smaller tiles (112x63) to keep decode+GC cost low on 1–2 GB RAM phones.
   clip._thumbQueued = true;
-  thumbQueue.push(clip);
+  thumbQueue.push({ clip, isDesktop });
   processThumbQueue();
 };
 const processThumbQueue = () => {
   if (thumbProcessing) return;
-  const clip = thumbQueue.shift();
+  const next = thumbQueue.shift();
+  if (!next) return;
+  const { clip, isDesktop } = next;
   if (!clip) return;
   thumbProcessing = true;
   // Sequential, throttled — Android low-RAM phones decode one video at a time, never in parallel
-  generateClipThumbnail(clip, () => {
+  generateClipThumbnail({ clip, tileW: isDesktop ? 176 : 112, tileH: isDesktop ? 99 : 63 }, () => {
     clip._thumbQueued = false;
     thumbProcessing = false;
     // Small breathing gap between heavy frame decodes
@@ -535,7 +536,8 @@ const processThumbQueue = () => {
   });
 };
 
-function generateClipThumbnail(clip, done) {
+function generateClipThumbnail(options, done) {
+  const { clip, tileW = 176, tileH = 99 } = options;
   const finish = () => { if (typeof done === 'function') done(); };
   if (clip.thumb) { finish(); return; }
   const video = clip.el;
@@ -546,7 +548,7 @@ function generateClipThumbnail(clip, done) {
     painted = true;
     try {
       const c = document.createElement('canvas');
-      c.width = 176; c.height = 99;
+      c.width = tileW; c.height = tileH;
       const tctx = c.getContext('2d');
       if (!tctx) { finish(); return; }
       const vw = video.videoWidth || 320, vh = video.videoHeight || 240;
@@ -814,7 +816,6 @@ function layoutTimeline() {
   const total = totalEffectiveDuration();
   const pxPerSec = clamp(state.pxPerSec || 120, 30, 420);
   const pxPerClip = 24; // min block width
-  const isThumbnailsEnabled = window.matchMedia('(min-width: 768px)').matches;
 
   // Size the inner canvas: wide enough for all clips, filling the viewport width if short
   const naturalWidth = Math.max(1, Math.ceil(total * pxPerSec));
@@ -837,11 +838,6 @@ function layoutTimeline() {
     if (!btn) continue;
     btn.style.left = clip.x + 'px';
     btn.style.width = clip.width + 'px';
-    // Mobile: never set thumbnails → zero-lag color-coded card with filename + duration
-    if (!isThumbnailsEnabled) {
-      btn.style.removeProperty('--thumb');
-      btn.classList.remove('has-thumb');
-    }
   }
 }
 
@@ -852,7 +848,6 @@ function renderTimeline() {
   // Absolute positioning with a fixed center playhead — the exact CapCut approach:
   // the playhead is pinned, the lane scrolls. No flex-grow hacks.
   state.pxPerSec = clamp(state.pxPerSec || 120, 30, 420);
-  const isThumbnailsEnabled = window.matchMedia('(min-width: 768px)').matches;
 
   state.clips.forEach((clip, i) => {
     const btn = document.createElement('button');
@@ -862,11 +857,7 @@ function renderTimeline() {
     btn.setAttribute('role', 'listitem');
     btn.setAttribute('aria-label', `Clip ${i + 1}: ${clip.name}`);
 
-    const isThumbnailsEnabled = window.matchMedia('(min-width: 768px)').matches;
-
-    // Mobile: skip thumbnails entirely — solid color-coded card with filename + duration,
-    // zero GPU decode cost on low-RAM Android devices (Redmi 7A-safe).
-    if (isThumbnailsEnabled && clip.thumb) {
+    if (clip.thumb) {
       btn.style.setProperty('--thumb', `url("${clip.thumb}")`);
       btn.classList.add('has-thumb');
     } else {
@@ -2391,9 +2382,9 @@ function renderLanes() {
   if (state.bgmLoaded) {
     const name = bgmName.textContent || 'audio';
     laneA1.innerHTML =
-      `<span class="lane-chip lane-chip-audio" title="${escapeHtml(name)}">` +
+      `<button type="button" class="lane-chip lane-chip-audio" data-lane-action="audio" title="${escapeHtml(name)} — background music">` +
         `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>` +
-        `${escapeHtml(shorten(name, 30))}</span>`;
+        `${escapeHtml(shorten(name, 30))}</button>`;
   } else {
     laneA1.innerHTML =
       `<button type="button" class="lane-ghost" data-lane-action="audio" title="Import background music or voiceover">` +
@@ -2405,13 +2396,13 @@ function renderLanes() {
   const chips = [];
   if (state.watermark.enabled && String(state.watermark.text).trim()) {
     chips.push(
-      `<span class="lane-chip lane-chip-text" title="${escapeHtml(state.watermark.text)}">` +
+      `<button type="button" class="lane-chip lane-chip-text" data-lane-action="text" title="${escapeHtml(state.watermark.text)} — watermark">` +
         `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 19 16 6l3 3L10 19"/><path d="M5 19h7"/></svg>` +
-        `${escapeHtml(shorten(state.watermark.text, 16))}</span>`
+        `${escapeHtml(shorten(state.watermark.text, 16))}</button>`
     );
   }
   for (const cap of state.captions.slice(0, 6)) {
-    chips.push(`<span class="lane-chip lane-chip-text" title="${escapeHtml(cap.text)}">${escapeHtml(shorten(cap.text, 16))}</span>`);
+    chips.push(`<button type="button" class="lane-chip lane-chip-text" data-lane-action="caption" title="${escapeHtml(cap.text)} — caption">${escapeHtml(shorten(cap.text, 16))}</button>`);
   }
   laneT1.innerHTML = chips.length
     ? chips.join('')
@@ -2421,13 +2412,30 @@ function renderLanes() {
 }
 
 // Lane ghost buttons: Audio → unified picker (routes audio to BGM), Text → caption panel
+// A1 / T1 lane interactivity: chips and the whole lane row open their editor tool card.
 if (lanesWrap) {
   lanesWrap.addEventListener('click', (e) => {
-    const ghost = e.target.closest('[data-lane-action]');
-    if (!ghost) return;
-    if (ghost.dataset.laneAction === 'audio') fileInput.click();
-    else if (ghost.dataset.laneAction === 'text') jumpToCard('card-captions');
-  });
+    // 1) Ghost "+" buttons on empty lanes open the picker / text editor
+    const ghost = e.target.closest('.lane-ghost[data-lane-action]');
+    if (ghost) {
+      if (ghost.dataset.laneAction === 'audio') fileInput.click();
+      else jumpToCard('card-captions');
+      return;
+    }
+    // 2) Lane chips: audio / text / caption — open the matching editor card
+    const chip = e.target.closest('.lane-chip[data-lane-action]');
+    if (chip) {
+      if (chip.dataset.laneAction === 'audio') jumpToCard('card-audio');
+      else if (chip.dataset.laneAction === 'text') jumpToCard('card-watermark');
+      else jumpToCard('card-captions');
+      return;
+    }
+    // 3) Whole lane is a tap target for desktop users
+    const laneA = e.target.closest('.lane-audio');
+    if (laneA) { jumpToCard('card-audio'); return; }
+    const laneT = e.target.closest('.lane-text');
+    if (laneT) { jumpToCard(state.captions.length ? 'card-captions' : 'card-watermark'); }
+  }, true);
 }
 
 /* ═════════════════════════════════════════════
