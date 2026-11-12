@@ -177,6 +177,9 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
   background: #000;
   display: block;
   touch-action: none;
+  /* Preview-only auto filmic look — applied by the GPU compositor, zero canvas cost on low-RAM phones.
+     The export path bakes the same grade via ctx.filter inside drawFrame() when state.exporting is true. */
+  filter: contrast(1.06) saturate(1.08);
 }
 
 .empty-state {

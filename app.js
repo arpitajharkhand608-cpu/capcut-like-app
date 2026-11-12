@@ -1794,13 +1794,14 @@ function transitionEase() {
 function drawVideoCover(el, W, H) {
   const vw = el.videoWidth, vh = el.videoHeight;
   if (!vw || !vh) return;
+  const exporting = state.exporting; // only pays rAF filter cost during export, never in preview
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingQuality = exporting ? 'high' : 'medium';
   const scale = Math.max(W / vw, H / vh); // cover
   const dw = vw * scale, dh = vh * scale;
-  ctx.filter = 'contrast(1.06) saturate(1.08)'; // subtle auto look — always on
+  if (exporting) ctx.filter = 'contrast(1.06) saturate(1.08)';
   ctx.drawImage(el, (W - dw) / 2, (H - dh) / 2, dw, dh);
-  ctx.filter = 'none';
+  if (exporting) ctx.filter = 'none';
 }
 
 /** Free-position persistent watermark. Position = normalized anchor (x,y); the horizontal
@@ -1882,9 +1883,10 @@ function drawFrame() {
 }
 
 function renderLoop() {
+  requestAnimationFrame(renderLoop); // keep the chain alive; browser auto-throttles hidden tabs
   tickPlayhead();
+  if (document.hidden) return;      // no drawing on background tabs — phone stays cool, no lag
   drawFrame();
-  requestAnimationFrame(renderLoop);
 }
 requestAnimationFrame(renderLoop);
 
