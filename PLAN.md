@@ -46,3 +46,15 @@ aspect crop 9:16/1:1/16:9, 0.5–2× speed, BGM + auto-enhance chain, timed capt
 multi-clip export → 720p/1280×720 MP4 (h264+opus, ~5.3 s for a 5 s 3-clip timeline),
 red/bars/sticker/caption all confirmed in extracted frames, SW offline shell, zero console errors.
 Note: Auto-Caption requires a real microphone (not automatable headless); it fails gracefully.
+
+
+## Cross-platform dual-mode (current)
+- **Desktop (>=1024px)**: 3-column studio - left icon rail, center stage, right step panels, bottom multi-track timeline bar.
+- **Tablet (768-1023px)**: single-column stacked, rail removed, ~150px timeline.
+- **Android (<768px)**: compact top stage (~32dvh, 100dvh-safe viewport), tool panel = slide-up CapCut Mobile sheet (same DOM/ids as desktop), bottom fixed dock (Import/Audio/Text/Stickers/Captions/Speed/Canvas).
+- **Dock actions**: fire jumpToCard() on each quick tool; Canvas flashes the aspect-switcher.
+- **Filmstrip thumbnails**: each clip captures a 176x99 JPEG tile at ~35% duration; reused across split (same source). Every V1 block shows a real frame preview on touch and mouse.
+- **Split tactile feedback**: white/neon flash at the cut point + micro-pop animation on the fresh halves. Fires on both Split button and 'S' shortcut (laneV1 pinch also exists for two-finger zoom; Ctrl+scroll is desktop's alternative).
+- **Pinch-to-zoom**: two-pointer touch on the V1 lane (Pointer Events), 0.6x-3.0x; double-tap resets to 1x. timelineZoom in state multiplies flex-grow; min-width catches via .has-thumb CSS.
+- **Service worker v23** - clients fetch the new build immediately.
+- **Verified end-to-end** (Chromium, fresh SW): thumbnails render (has-thumb on all 3 blocks after split), split flash + pop fire, mobile dock resolves 7 thumb buttons, 0 console errors.
