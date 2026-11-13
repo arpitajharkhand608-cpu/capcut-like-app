@@ -150,14 +150,20 @@ const state = {
   timelineSync: false,     // guard flag to prevent scroll→seek feedback loops
 };
 
-const MAX_RENDER_WIDTH = 1280;
+const MAX_RENDER_WIDTH = 1280; // 720p export cap — prevents low-RAM Android kills
 const ASPECT_SIZES = {
   '16:9': { w: 1280, h: 720  },
   '1:1':  { w: 960,  h: 960  },
   '9:16': { w: 720,  h: 1280 },
 };
 const ASPECT_RATIO_CSS = { '16:9': '16 / 9', '1:1': '1 / 1', '9:16': '9 / 16' };
-const EXPORT_VIDEO_BITS = 8_000_000;   // 8 Mbps — visually lossless-ish at 720p
+// Adaptive bitrate — low-memory Android devices get 4 Mbps so MediaRecorder never stalls.
+// Desktop/laptop stay at 8 Mbps for pristine output.
+const LOW_RAM = typeof navigator !== 'undefined' && (
+  (navigator.deviceMemory && navigator.deviceMemory <= 2) ||
+  (/Android|Linux/i.test(navigator.userAgent || '') && window.matchMedia('(max-width: 767px)').matches)
+);
+const EXPORT_VIDEO_BITS = LOW_RAM ? 4_000_000 : 8_000_000;   // 4 Mbps on ≤2 GB phones, 8 Mbps elsewhere
 const EXPORT_AUDIO_BITS = 192_000;     // 192 kbps AAC/Opus
 const EXPORT_FPS       = 30;
 const MIN_CLIP_GAP     = 0.1;          // seconds — minimum clip length after trim/split
@@ -1198,7 +1204,7 @@ function hitTestOverlays(nx, ny) {
   return null;
 }
 
-canvas.addEventListener('pointerdown', (e) => {
+function canvasHandlePointerDown(e) {
   if (state.exporting) return;
   const p = canvasPointFromEvent(e);
 
@@ -1210,8 +1216,9 @@ canvas.addEventListener('pointerdown', (e) => {
     dragState.dx = wm.x - p.x;
     dragState.dy = wm.y - p.y;
     dragState.moved = false;
-    commit(); // snapshot PRE-drag position so one undo reverts the whole gesture
+    commit();
     try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* bubbling still works */ }
+    try { canvas.setCapture && canvas.setCapture(e.pointerId); } catch (_) {}
     return;
   }
 
@@ -1223,12 +1230,13 @@ canvas.addEventListener('pointerdown', (e) => {
   dragState.dy = hit.y - p.y;
   dragState.moved = false;
   state.selectedOverlayId = hit.id;
-  commit(); // snapshot PRE-drag position so one undo reverts the whole gesture
+  commit();
   renderOverlayList();
-  try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* bubbling still works */ }
-});
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  try { canvas.setCapture && canvas.setCapture(e.pointerId); } catch (_) {}
+}
 
-canvas.addEventListener('pointermove', (e) => {
+function canvasHandlePointerMove(e) {
   if (dragState.kind == null) return;
   const p = canvasPointFromEvent(e);
 
@@ -1251,13 +1259,37 @@ canvas.addEventListener('pointermove', (e) => {
   o.x = nx;
   o.y = ny;
   drawFrame();
-});
+}
 
-canvas.addEventListener('pointerup', () => {
+function canvasHandlePointerUp() {
   dragState.kind = null;
   dragState.id = null;
   dragState.moved = false;
-});
+}
+
+// Pointer Events (modern browsers)
+canvas.addEventListener('pointerdown', canvasHandlePointerDown);
+canvas.addEventListener('pointermove', canvasHandlePointerMove);
+canvas.addEventListener('pointerup', canvasHandlePointerUp);
+canvas.addEventListener('pointercancel', canvasHandlePointerUp);
+canvas.addEventListener('pointerleave', canvasHandlePointerUp);
+
+// Touch Events fallback for older/limited Android WebViews — synthetic events for the same pipeline
+canvas.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  const t = e.touches[0];
+  canvasHandlePointerDown({ clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier });
+  // preventDefault so the page doesn't scroll while dragging — canvas has touch-action:none via CSS anyway
+  e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('touchmove', (e) => {
+  if (e.touches.length !== 1) return;
+  const t = e.touches[0];
+  canvasHandlePointerMove({ clientX: t.clientX, clientY: t.clientY });
+  e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('touchend', () => canvasHandlePointerUp(), { passive: false });
+canvas.addEventListener('touchcancel', () => canvasHandlePointerUp(), { passive: false });
 canvas.addEventListener('pointercancel', () => { dragState.kind = null; dragState.id = null; dragState.moved = false; });
 
 /* ═════════════════════════════════════════════
