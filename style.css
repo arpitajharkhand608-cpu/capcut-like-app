@@ -817,20 +817,25 @@ button.lane-chip { border: 0; cursor: pointer; }
     flex: 1 1 auto; min-height: 0;
     padding: 6px; gap: 6px; overflow: hidden;
   }
-  /* ══ 3-ZONE CAPCUT MOBILE GRID (strict, no overflow, no overlap) ══ */
+  /* ══ 3-ZONE CAPCUT MOBILE GRID — STRICT, ZERO OVERFLOW ══ */
   .studio {
     display: grid;
-    grid-template-rows: minmax(0, 40dvh) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 38dvh) minmax(0, 1fr);
     flex: 1 1 auto; min-height: 0;
     padding: 0; gap: 0; overflow: hidden;
   }
   .stage-panel {
     grid-row: 1; display: flex; flex-direction: column;
-    gap: 0; min-height: 0; border-bottom: 1px solid var(--border);
+    gap: 0; min-height: 0; padding: 0;
+    border-bottom: 1px solid var(--border);
+    background: #000;
+    overflow: hidden;
   }
   .stage-frame {
-    flex: 1 1 auto; min-height: 0; height: auto; max-height: 40dvh;
+    flex: 1 1 auto; min-height: 0; height: 100%; max-height: 38dvh;
     border-radius: 0; border: 0;
+    overflow: hidden;
+    position: relative;
   }
   .transport {
     flex: 0 0 auto; height: 52px; padding: 6px 10px; gap: 10px;
@@ -840,11 +845,14 @@ button.lane-chip { border: 0; cursor: pointer; }
   .timecode-label { font-size: 10.5px; min-width: 84px; padding: 5px 6px; }
   .seek-bar { min-width: 0; }
 
-  /* Middle tool panel — strict bounded height, scrolls inside */
+  /* Middle tool panel — strict bounded height, scrolls inside (NEVER overflows the stage) */
   .tool-panel {
     grid-row: 2; flex: 0 0 auto; display: flex; flex-direction: column;
-    min-height: 0; overflow-y: auto; padding: 6px 8px; gap: 6px;
+    min-height: 0; overflow-y: auto; overflow-x: hidden;
+    padding: 6px 8px 12px; gap: 6px;
     scrollbar-width: none; background: #0d0d0d;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
   .card { flex: 0 0 auto; padding: 8px 9px; }
   .card-head { gap: 6px; }
@@ -852,8 +860,13 @@ button.lane-chip { border: 0; cursor: pointer; }
   .step-badge { width: 16px; height: 16px; font-size: 8.5px; }
   .hint, .meta-line { font-size: 9px; }
 
-  /* Bottom timeline — pinned, fixed height so tracks never collapse or bunch */
-  .timeline-bar { flex: 0 0 148px; min-height: 128px; }
+  /* Bottom timeline — pinned; tracks never bunch, never overflow */
+  .timeline-bar {
+    flex: 0 0 140px; min-height: 140px; height: 140px;
+    display: flex; flex-direction: column;
+    overflow: hidden; border-top: 1px solid var(--border-2);
+    padding: 0; background: #0d0d0d;
+  }
   .timeline-toolbar {
     height: 46px; padding: 0 6px; gap: 6px;
     border-bottom: 1px solid var(--border);
